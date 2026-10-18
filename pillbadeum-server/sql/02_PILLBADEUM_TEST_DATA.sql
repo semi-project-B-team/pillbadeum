@@ -2,7 +2,6 @@
 -- 실제 사용자 DB에는 실행하지 않습니다. 로그인 API는 아직 구현되지 않았습니다.
 
 START TRANSACTION;
-
 -- 3-1. 회원 5명 (모든 비밀번호는 demo1234의 BCrypt 해시 예시)
 INSERT INTO member (email, password_hash, nickname, user_role, created_at) VALUES
 ('minji@pillbadeum.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '김민지', 'ROLE_USER', '2026-10-01 09:00:00'),
