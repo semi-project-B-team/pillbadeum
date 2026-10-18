@@ -9,7 +9,7 @@ INSERT INTO member (email, password_hash, nickname, user_role, created_at) VALUE
 ('junho@pillbadeum.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '이준호', 'ROLE_USER', '2026-10-02 10:00:00'),
 ('seoyeon@pillbadeum.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '박서연', 'ROLE_USER', '2026-10-03 11:00:00'),
 ('hyunwoo@pillbadeum.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '최현우', 'ROLE_USER', '2026-10-04 12:00:00'),
-('admin@pillbadeum.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '필받음관리자', 'ROLE_ADMIN', '2026-10-05 13:00:00');
+('admin@pillbadeum.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '관리자', 'ROLE_ADMIN', '2026-10-05 13:00:00');
 
 -- 3-2. 약관 4종: 개인정보/민감정보/마케팅/복약 알림 수신 동의
 INSERT INTO terms (terms_type, terms_version, terms_title, terms_content, is_required, is_active, effective_at) VALUES
