@@ -24,7 +24,7 @@ INSERT INTO profile (member_id, profile_name, relationship_type, profile_birth_y
 (2, '준호', 'SELF', 1990, 'MALE', 178, 74, FALSE), (2, '아버지', 'FATHER', 1962, 'MALE', 171, 70, FALSE), (2, '딸 지아', 'CHILD', 2018, 'FEMALE', 116, 21, FALSE),
 (3, '서연', 'SELF', 1993, 'FEMALE', 167, 55, FALSE), (3, '할머니', 'GRANDMOTHER', 1945, 'FEMALE', 150, 48, FALSE), (3, '남편', 'SPOUSE', 1991, 'MALE', 180, 78, FALSE),
 (4, '현우', 'SELF', 1988, 'MALE', 175, 69, FALSE), (4, '어머니', 'MOTHER', 1965, 'FEMALE', 155, 54, FALSE), (4, '아들 민석', 'CHILD', 2016, 'MALE', 124, 25, FALSE),
-(5, '관리자', 'SELF', 1985, 'UNKNOWN', NULL, NULL, FALSE), (5, '부모님', 'PARENT', 1958, 'UNKNOWN', NULL, NULL, FALSE), (5, '테스트 자녀', 'CHILD', 2015, 'UNKNOWN', NULL, NULL, FALSE);
+(5, '관리자', 'SELF', 1985, 'MALE', NULL, NULL, FALSE), (5, '부모님', 'PARENT', 1958, 'UNKNOWN', NULL, NULL, FALSE), (5, '테스트 자녀', 'CHILD', 2015, 'UNKNOWN', NULL, NULL, FALSE);
 
 -- 3-4. 약관 동의 이력 3건
 INSERT INTO consent_history (member_id, terms_id, consent_status, recorded_at) VALUES
