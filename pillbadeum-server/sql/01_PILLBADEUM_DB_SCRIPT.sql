@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS terms
     CONSTRAINT uk_terms_type_version UNIQUE (terms_type, terms_version)
 ) ENGINE=INNODB COMMENT '약관';
 
-
 CREATE TABLE IF NOT EXISTS profile
 (
     profile_id BIGINT AUTO_INCREMENT COMMENT '프로필 코드',
