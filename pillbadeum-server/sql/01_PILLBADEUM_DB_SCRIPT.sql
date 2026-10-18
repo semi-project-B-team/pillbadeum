@@ -91,7 +91,6 @@ CREATE TABLE IF NOT EXISTS drug
     material VARCHAR(100) NOT NULL COMMENT '성분',
     synced_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '동기화 시각',
     CONSTRAINT pk_drug PRIMARY KEY (item_seq),
-    CONSTRAINT ck_drug_etc_otc CHECK (etc_otc IN ('ETC', 'OTC')),
     CONSTRAINT chk_drug_type CHECK (etc_otc IN ('ETC', 'OTC'))
 ) ENGINE=INNODB COMMENT '의약품';
 
