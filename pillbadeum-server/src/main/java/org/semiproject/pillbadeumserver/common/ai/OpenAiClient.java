@@ -34,6 +34,13 @@ public class OpenAiClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiClient.class);
     private static final String API_NAME = "OpenAI";
+    private static final String VISION_REASONING_EFFORT = "low";
+    /**
+     * 알약의 각인·외형 판독은 전체 사진의 미세한 장면 분석보다 응답 시간이 중요하다.
+     * 자동 해상도 선택은 큰 원본에서 고해상도 처리를 선택해 요청이 오래 걸릴 수 있으므로
+     * 이 추출 경로에는 낮은 해상도를 명시한다.
+     */
+    private static final String VISION_IMAGE_DETAIL = "low";
 
     private final RestClient shortClient;
     private final RestClient longClient;
@@ -156,11 +163,18 @@ public class OpenAiClient {
         List<Map<String, Object>> content = new ArrayList<>();
         content.add(Map.<String, Object>of("type", "input_text", "text", prompt));
         for (String imageDataUrl : imageDataUrls) {
-            content.add(Map.<String, Object>of("type", "input_image", "image_url", imageDataUrl));
+            content.add(Map.<String, Object>of(
+                    "type", "input_image",
+                    "image_url", imageDataUrl,
+                    "detail", VISION_IMAGE_DETAIL));
         }
         List<Map<String, Object>> input = List.of(Map.<String, Object>of("role", "user", "content", content));
 
         Map<String, Object> body = requestBody(visionModel, instructions, input, maxOutputTokens);
+        // 알약 사진의 각인·색상·모양 추출은 긴 계획이나 추론이 아닌 구조화된 정보 추출 작업이다.
+        // 전역 high 설정을 그대로 쓰면 작은 사진 한 장도 응답 시간이 크게 늘어날 수 있으므로,
+        // 비전 추출만은 낮은 추론 수준으로 고정한다.
+        body.put("reasoning", Map.of("effort", VISION_REASONING_EFFORT));
         body.put("text", jsonSchemaFormat(schemaName, schema));
 
         return parseJson(outputText(post(longClient, "/responses", body, visionModel, false)));

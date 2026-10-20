@@ -13,6 +13,7 @@ import org.semiproject.pillbadeumserver.image.service.PillPhotoIdentificationSer
 import org.semiproject.pillbadeumserver.image.service.PrescriptionPhotoIdentificationService;
 import org.semiproject.pillbadeumserver.image.service.TemporaryPhotoUploadService;
 import org.semiproject.pillbadeumserver.drug.dto.MyDrugListResponse;
+import org.semiproject.pillbadeumserver.common.exception.ExternalApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.context.request.async.WebAsyncTask;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.List;
 @RequestMapping("/api/images")
 public class PillIdentificationController {
 
+    private static final long PILL_PHOTO_REQUEST_TIMEOUT_MILLIS = 40_000L;
     private final PillDrugIdentificationService identificationService;
     private final PillDrugRegistrationService registrationService;
     private final PillPhotoIdentificationService photoIdentificationService;
@@ -55,10 +58,16 @@ public class PillIdentificationController {
 
     /** 임시 알약 사진 한두 장을 읽어 들여 공개 데이터 기반의 후보 항목들을 반환 */
     @PostMapping(value = "/pill-photo/identify", consumes = "multipart/form-data")
-    public PillPhotoIdentificationResponse identifyPhotos(
+    public WebAsyncTask<PillPhotoIdentificationResponse> identifyPhotos(
             @RequestParam(value = "profileId", required = false) Long profileId,
             @RequestParam("images") List<MultipartFile> images) {
-        return photoIdentificationService.identify(profileId, images);
+        WebAsyncTask<PillPhotoIdentificationResponse> task = new WebAsyncTask<>(
+                PILL_PHOTO_REQUEST_TIMEOUT_MILLIS,
+                () -> photoIdentificationService.identify(profileId, images));
+        task.onTimeout(() -> {
+            throw ExternalApiException.timeout("알약 사진 식별", null);
+        });
+        return task;
     }
 
     /** 처방전/약봉투 사진에서 읽은 약 이름과 조회 후보를 기존 OCR 테이블에 등록 */
