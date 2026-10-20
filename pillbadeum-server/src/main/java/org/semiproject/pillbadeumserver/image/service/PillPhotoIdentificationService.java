@@ -5,8 +5,6 @@ import org.semiproject.pillbadeumserver.common.exception.BusinessException;
 import org.semiproject.pillbadeumserver.common.exception.ErrorCode;
 import org.semiproject.pillbadeumserver.common.exception.ExternalApiException;
 import org.semiproject.pillbadeumserver.common.file.FileStorage;
-import org.semiproject.pillbadeumserver.common.security.SecurityUtil;
-import org.semiproject.pillbadeumserver.drug.service.ProfileAccessChecker;
 import org.semiproject.pillbadeumserver.image.domain.PillIdentification;
 import org.semiproject.pillbadeumserver.image.domain.PillIdentificationCandidate;
 import org.semiproject.pillbadeumserver.image.domain.PillPhotoIdentificationResponse;
@@ -48,43 +46,41 @@ public class PillPhotoIdentificationService {
     private final FileStorage fileStorage;
     private final OpenAiClient openAiClient;
     private final PillDrugIdentificationService identificationService;
-    private final ImageKeywordRegistrationService keywordRegistrationService;
-    private final ProfileAccessChecker profileAccessChecker;
+    private final TemporaryPhotoCleanupService cleanup;
 
     public PillPhotoIdentificationService(FileStorage fileStorage,
                                           OpenAiClient openAiClient,
                                           PillDrugIdentificationService identificationService,
-                                          ImageKeywordRegistrationService keywordRegistrationService,
-                                          ProfileAccessChecker profileAccessChecker) {
+                                          TemporaryPhotoCleanupService cleanup) {
         this.fileStorage = fileStorage;
         this.openAiClient = openAiClient;
         this.identificationService = identificationService;
-        this.keywordRegistrationService = keywordRegistrationService;
-        this.profileAccessChecker = profileAccessChecker;
+        this.cleanup = cleanup;
     }
 
-    public PillPhotoIdentificationResponse identify(Long profileId, List<MultipartFile> images) {
-        SecurityUtil.getCurrentMemberId();
-        if (profileId != null) {
-            profileAccessChecker.checkOwner(profileId);
-        }
+    public PillPhotoIdentificationResponse identify(List<MultipartFile> images) {
         if (images == null || images.isEmpty() || images.size() > MAX_PHOTOS) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "알약 사진은 앞면과 뒷면을 최대 2장까지 올려 주세요.");
         }
 
         List<String> savedNames = new ArrayList<>();
-        boolean registered = false;
+        boolean completed = false;
         try {
             List<String> dataUrls = new ArrayList<>();
             for (MultipartFile image : images) {
-                String savedName = fileStorage.saveImage(image, IMG_TEMP_DIRECTORY);
+                String savedName = fileStorage.saveImage(image, FileStorage.DIR_TEMP);
                 savedNames.add(savedName);
                 dataUrls.add(OpenAiClient.toDataUrl(
-                        fileStorage.readBytes(savedName, IMG_TEMP_DIRECTORY),
+                        fileStorage.readBytes(savedName, FileStorage.DIR_TEMP),
                         fileStorage.getMimeType(savedName)));
             }
 
+
             JsonNode output = readPillPhotoWithinTimeout(dataUrls);
+            JsonNode output = openAiClient.createJsonFromImages(
+                    INSTRUCTIONS,
+                    "알약 사진을 식별하고 다음 필드에 정보를 채우세요. 사진 순서는 업로드 순서입니다.",
+                    dataUrls, 500, "pill_image_reading", SCHEMA);
             PillIdentification extracted = toIdentification(output);
             if (!hasAttributes(extracted)) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT,
@@ -111,10 +107,12 @@ public class PillPhotoIdentificationService {
                 registered = true;
             }
             return new PillPhotoIdentificationResponse(extracted, candidates, photoIds, lookupStatus);
+            List<PillIdentificationCandidate> candidates = identificationService.identify(extracted);
+            completed = true;
+            return new PillPhotoIdentificationResponse(extracted, candidates);
         } finally {
-            if (!registered) {
-                savedNames.forEach(name -> fileStorage.delete(name, IMG_TEMP_DIRECTORY));
-            }
+            if (completed) cleanup.deleteAfterProcessing(savedNames);
+            else cleanup.deleteNow(savedNames);
         }
     }
 

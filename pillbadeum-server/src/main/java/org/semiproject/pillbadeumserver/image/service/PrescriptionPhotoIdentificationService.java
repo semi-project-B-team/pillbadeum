@@ -7,7 +7,6 @@ import org.semiproject.pillbadeumserver.common.file.FileStorage;
 import org.semiproject.pillbadeumserver.drug.dto.DrugSearchResponse;
 import org.semiproject.pillbadeumserver.drug.service.DrugSearchService;
 import org.semiproject.pillbadeumserver.drug.service.ProfileAccessChecker;
-import org.semiproject.pillbadeumserver.image.domain.ImagePhotoKind;
 import org.semiproject.pillbadeumserver.image.domain.PrescriptionPhotoIdentificationResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -25,7 +24,6 @@ import java.util.Set;
 @Service
 public class PrescriptionPhotoIdentificationService {
 
-    private static final String IMG_TEMP_DIRECTORY = "img_temp";
     private static final int MAX_PHOTOS = 3;
     private static final int MAX_MEDICINE_NAMES = 10;
     private static final Map<String, Object> SCHEMA = schema();
@@ -40,40 +38,35 @@ public class PrescriptionPhotoIdentificationService {
     private final OpenAiClient openAiClient;
     private final DrugSearchService drugSearchService;
     private final ProfileAccessChecker profileAccessChecker;
-    private final ImageKeywordRegistrationService keywordRegistrationService;
+    private final TemporaryPhotoCleanupService cleanup;
 
     public PrescriptionPhotoIdentificationService(FileStorage fileStorage,
                                                    OpenAiClient openAiClient,
                                                    DrugSearchService drugSearchService,
                                                    ProfileAccessChecker profileAccessChecker,
-                                                   ImageKeywordRegistrationService keywordRegistrationService) {
+                                                   TemporaryPhotoCleanupService cleanup) {
         this.fileStorage = fileStorage;
         this.openAiClient = openAiClient;
         this.drugSearchService = drugSearchService;
         this.profileAccessChecker = profileAccessChecker;
-        this.keywordRegistrationService = keywordRegistrationService;
+        this.cleanup = cleanup;
     }
 
-    public PrescriptionPhotoIdentificationResponse identify(Long profileId, ImagePhotoKind kind,
-                                                            List<MultipartFile> images) {
+    public PrescriptionPhotoIdentificationResponse identify(Long profileId, List<MultipartFile> images) {
         profileAccessChecker.checkOwner(profileId);
-        if (kind == ImagePhotoKind.PILL) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT,
-                    "처방전 또는 약봉투 종류만 이 API에서 등록할 수 있습니다.");
-        }
         if (images == null || images.isEmpty() || images.size() > MAX_PHOTOS) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "처방전/약봉투 사진은 최대 3장까지 올려 주세요.");
         }
 
         List<String> savedNames = new ArrayList<>();
-        boolean registered = false;
+        boolean completed = false;
         try {
             List<String> dataUrls = new ArrayList<>();
             for (MultipartFile image : images) {
-                String savedName = fileStorage.saveImage(image, IMG_TEMP_DIRECTORY);
+                String savedName = fileStorage.saveImage(image, FileStorage.DIR_TEMP);
                 savedNames.add(savedName);
                 dataUrls.add(OpenAiClient.toDataUrl(
-                        fileStorage.readBytes(savedName, IMG_TEMP_DIRECTORY),
+                        fileStorage.readBytes(savedName, FileStorage.DIR_TEMP),
                         fileStorage.getMimeType(savedName)));
             }
 
@@ -89,38 +82,28 @@ public class PrescriptionPhotoIdentificationService {
 
             List<PrescriptionPhotoIdentificationResponse.MedicineCandidates> medicines = names.stream()
                     .limit(MAX_MEDICINE_NAMES)
-                    .map(name -> {
-                        LookupResult lookup = search(name);
-                        return new PrescriptionPhotoIdentificationResponse.MedicineCandidates(
-                                name, lookup.candidates(), lookup.status());
-                    })
+                    .map(name -> new PrescriptionPhotoIdentificationResponse.MedicineCandidates(
+                            name, search(name)))
                     .toList();
-            List<Long> photoIds = keywordRegistrationService.registerPrescriptionKeywords(
-                    profileId, kind == null ? ImagePhotoKind.PRESCRIPTION : kind,
-                    images, savedNames, medicines);
-            registered = true;
-            return new PrescriptionPhotoIdentificationResponse(medicines, photoIds);
+            var response = new PrescriptionPhotoIdentificationResponse(medicines);
+            completed = true;
+            return response;
         } finally {
-            if (!registered) {
-                savedNames.forEach(name -> fileStorage.delete(name, IMG_TEMP_DIRECTORY));
-            }
+            if (completed) cleanup.deleteAfterProcessing(savedNames);
+            else cleanup.deleteNow(savedNames);
         }
     }
 
-    private LookupResult search(String name) {
+    private List<DrugSearchResponse> search(String name) {
         try {
-            List<DrugSearchResponse> candidates = drugSearchService.search(name, PageRequest.of(0, 5)).getContent();
-            return new LookupResult(candidates, candidates.isEmpty() ? "NOT_FOUND" : "OK");
+            return drugSearchService.search(name, PageRequest.of(0, 5)).getContent();
         } catch (BusinessException exception) {
             // 너무 짧거나 비정상적으로 읽힌 문자열은 나머지 약 검색을 중단하지 않습니다.
             if (exception.getErrorCode() == ErrorCode.INVALID_INPUT) {
-                return new LookupResult(List.of(), "NOT_FOUND");
+                return List.of();
             }
-            return new LookupResult(List.of(), "FAILED");
+            throw exception;
         }
-    }
-
-    private record LookupResult(List<DrugSearchResponse> candidates, String status) {
     }
 
     private static Set<String> readNames(JsonNode output) {
