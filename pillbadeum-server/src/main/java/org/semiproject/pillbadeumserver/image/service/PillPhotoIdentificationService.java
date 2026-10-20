@@ -35,12 +35,17 @@ public class PillPhotoIdentificationService {
     private final FileStorage fileStorage;
     private final OpenAiClient openAiClient;
     private final PillDrugIdentificationService identificationService;
+
     private final ImageKeywordRegistrationService keywordRegistrationService;
     private final ProfileAccessChecker profileAccessChecker;
+
+    private final TemporaryPhotoCleanupService cleanup;
+
 
     public PillPhotoIdentificationService(FileStorage fileStorage,
                                           OpenAiClient openAiClient,
                                           PillDrugIdentificationService identificationService,
+
                                           ImageKeywordRegistrationService keywordRegistrationService,
                                           ProfileAccessChecker profileAccessChecker) {
         this.fileStorage = fileStorage;
@@ -48,6 +53,13 @@ public class PillPhotoIdentificationService {
         this.identificationService = identificationService;
         this.keywordRegistrationService = keywordRegistrationService;
         this.profileAccessChecker = profileAccessChecker;
+
+                                          TemporaryPhotoCleanupService cleanup) {
+        this.fileStorage = fileStorage;
+        this.openAiClient = openAiClient;
+        this.identificationService = identificationService;
+        this.cleanup = cleanup;
+
     }
 
     public PillPhotoIdentificationResponse identify(Long profileId, List<MultipartFile> images) {
@@ -60,6 +72,7 @@ public class PillPhotoIdentificationService {
         }
 
         List<String> savedNames = new ArrayList<>();
+
         boolean registered = false;
         try {
             List<String> dataUrls = new ArrayList<>();
@@ -68,6 +81,15 @@ public class PillPhotoIdentificationService {
                 savedNames.add(savedName);
                 dataUrls.add(OpenAiClient.toDataUrl(
                         fileStorage.readBytes(savedName, IMG_TEMP_DIRECTORY),
+
+        boolean completed = false;
+        try {
+            List<String> dataUrls = new ArrayList<>();
+            for (MultipartFile image : images) {
+                String savedName = fileStorage.saveImage(image, FileStorage.DIR_TEMP);
+                savedNames.add(savedName);
+                dataUrls.add(OpenAiClient.toDataUrl(
+                        fileStorage.readBytes(savedName, FileStorage.DIR_TEMP),
                         fileStorage.getMimeType(savedName)));
             }
 
@@ -80,6 +102,7 @@ public class PillPhotoIdentificationService {
                 throw new BusinessException(ErrorCode.INVALID_INPUT,
                         "알약 정보를 읽지 못했습니다. 알약 앞면이 선명하게 보이도록 다시 촬영해 주세요.");
             }
+
 
             List<PillIdentificationCandidate> candidates;
             String lookupStatus;
@@ -99,6 +122,12 @@ public class PillPhotoIdentificationService {
             if (!registered) {
                 savedNames.forEach(name -> fileStorage.delete(name, IMG_TEMP_DIRECTORY));
             }
+            List<PillIdentificationCandidate> candidates = identificationService.identify(extracted);
+            completed = true;
+            return new PillPhotoIdentificationResponse(extracted, candidates);
+        } finally {
+            if (completed) cleanup.deleteAfterProcessing(savedNames);
+            else cleanup.deleteNow(savedNames);
         }
     }
 

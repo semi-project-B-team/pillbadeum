@@ -41,17 +41,25 @@ public class PrescriptionPhotoIdentificationService {
     private final DrugSearchService drugSearchService;
     private final ProfileAccessChecker profileAccessChecker;
     private final ImageKeywordRegistrationService keywordRegistrationService;
+    private final TemporaryPhotoCleanupService cleanup;
 
     public PrescriptionPhotoIdentificationService(FileStorage fileStorage,
                                                    OpenAiClient openAiClient,
                                                    DrugSearchService drugSearchService,
                                                    ProfileAccessChecker profileAccessChecker,
+
                                                    ImageKeywordRegistrationService keywordRegistrationService) {
+
+                                                   TemporaryPhotoCleanupService cleanup) {
+
         this.fileStorage = fileStorage;
         this.openAiClient = openAiClient;
         this.drugSearchService = drugSearchService;
         this.profileAccessChecker = profileAccessChecker;
+
         this.keywordRegistrationService = keywordRegistrationService;
+
+        this.cleanup = cleanup;
     }
 
     public PrescriptionPhotoIdentificationResponse identify(Long profileId, ImagePhotoKind kind,
@@ -74,6 +82,14 @@ public class PrescriptionPhotoIdentificationService {
                 savedNames.add(savedName);
                 dataUrls.add(OpenAiClient.toDataUrl(
                         fileStorage.readBytes(savedName, IMG_TEMP_DIRECTORY),
+        boolean completed = false;
+        try {
+            List<String> dataUrls = new ArrayList<>();
+            for (MultipartFile image : images) {
+                String savedName = fileStorage.saveImage(image, FileStorage.DIR_TEMP);
+                savedNames.add(savedName);
+                dataUrls.add(OpenAiClient.toDataUrl(
+                        fileStorage.readBytes(savedName, FileStorage.DIR_TEMP),
                         fileStorage.getMimeType(savedName)));
             }
 
@@ -104,6 +120,12 @@ public class PrescriptionPhotoIdentificationService {
             if (!registered) {
                 savedNames.forEach(name -> fileStorage.delete(name, IMG_TEMP_DIRECTORY));
             }
+            var response = new PrescriptionPhotoIdentificationResponse(medicines);
+            completed = true;
+            return response;
+        } finally {
+            if (completed) cleanup.deleteAfterProcessing(savedNames);
+            else cleanup.deleteNow(savedNames);
         }
     }
 
