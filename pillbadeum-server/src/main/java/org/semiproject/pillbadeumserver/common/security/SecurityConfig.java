@@ -68,6 +68,8 @@ public class SecurityConfig {
                         auth.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll();
                         // 컨트롤러도 local 프로필에만 존재한다. Live 업무 API는 인증을 유지한다.
                         auth.requestMatchers(HttpMethod.GET, "/dev/medication-live", "/dev/medication-live.js").permitAll();
+                        // 웹 푸시 시험 화면(local 전용). 시험 발송 POST는 인증을 유지한다.
+                        auth.requestMatchers(HttpMethod.GET, "/dev/push-test", "/dev/push-test.js", "/dev/push-sw.js").permitAll();
                     }
                     auth
 
@@ -85,8 +87,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
                         // 로그인 (AUTH-003)
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        // 로그아웃 (AUTH-004): 화면에서 토큰을 지운다. 만료·미보유 상태도 허용한다.
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
 
                         /* 목차. 3-3. 프로필 (PROF)        /api/profiles/** */
 
