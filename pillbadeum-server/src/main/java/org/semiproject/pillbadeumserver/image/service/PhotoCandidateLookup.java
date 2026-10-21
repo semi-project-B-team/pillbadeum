@@ -30,11 +30,7 @@ public class PhotoCandidateLookup {
   }
 
   public Result prescriptionResult(String name, String maker) {
-    var rows = PublicDataClient.items(client.get(DrugSyncService.PERMIT_INFO_PATH, query(name, maker)));
-    var ordered = rows.stream().sorted(Comparator.<JsonNode>comparingInt(row -> Boolean.TRUE.equals(org.semiproject.pillbadeumserver.drug.domain.DrugCancellation.parse(row)) ? 1 : 0)
-        .thenComparingInt(row -> exact(name, text(row, "ITEM_NAME")) ? 0 : 1)
-        .thenComparingInt(row -> exact(maker, text(row, "ENTP_NAME")) ? 0 : 1)).toList();
-    return validated(ordered, null);
+    return validated(MedicineNameSearch.rows(client, name, maker), null);
   }
 
   public List<PhotoCandidateData> pill(PillIdentification clues) {
@@ -105,19 +101,6 @@ public class PhotoCandidateLookup {
         known(material, 30),
         matched,
         cancelled);
-  }
-
-  private static boolean exact(String a, String b) {
-    return present(a) && normalize(a).equals(normalize(b));
-  }
-
-  private static String normalize(String s) {
-    if (s == null) return "";
-    return s.replace("하양", "흰색")
-        .replace("하얀색", "흰색")
-        .replace("WHITE", "흰색")
-        .replaceAll("[^\\p{L}\\p{N}]", "")
-        .toUpperCase(Locale.ROOT);
   }
 
   private static boolean present(String s) {

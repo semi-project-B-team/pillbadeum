@@ -1,5 +1,7 @@
 # 사진으로 약 등록 · REG-002~007 통합
 
+처방전·약봉투에서 **여러 이름을 배열로 저장하고 각각 검색**하는 계약은 [약 이름 추출 계약](PRESCRIPTION_NAME_EXTRACTION.md)을 참고함. SQL 10의 `photo.medicine_names`가 추가됐으며, `/api/images/profiles/{profileId}/prescription-photo/identify`와 아래 통합 경로는 기본적으로 이름별 후보를 검색함. 이름 추출 전용 경로는 `/api/profiles/{profileId}/photo-name-extractions`임.
+
 ## 적용과 범위
 
 SQL 01 → 03 → 04 → **05_PHOTO_CANDIDATE_LINKS.sql**을 명시적으로 실행한 서버가 기준임. 기존 데이터는 보존하며 05 마지막 `photo_links_status=READY`를 확인함. 적용 후 16개 표·127개 열·18개 FK임. 앱이 업무 DB에 자동 적용하지 않음.
@@ -35,12 +37,12 @@ SQL 01 → 03 → 04 → **05_PHOTO_CANDIDATE_LINKS.sql**을 명시적으로 실
 
 ## 상태와 장애
 
-- `OK`: 실제 후보가 하나 이상이며 성공 사진을 확인 완료까지 유지함. 약별 `lookup`은 OK / NOT_FOUND / FAILED로 구분함. 일부 이름 조회 실패가 나머지 후보를 없애지 않음.
+- `OK`: 모든 약의 조회가 성공함(이름만 추출하는 모드도 포함). `PARTIAL`은 성공/0건/실패가 섞이거나 일부 후보를 제외한 경우임. 약별 `lookup`은 OK / PARTIAL / NOT_FOUND / FAILED로 구분함. 일부 이름 조회 실패가 나머지 후보를 없애지 않음.
 - `UNREADABLE`: 처방전 글자·사진 종류·알약 수가 유효하지 않거나, 알약의 이름과 제약사를 모두 읽지 못한 경우임. 200 업무 결과이며 photoId/photoIds는 NULL임.
-- `NOT_FOUND`: 읽기는 성공했으나 실제 공식 후보가 전부0건인 경우임. 200이며 사진·후보를 정리함.
-- 모델 오류·전체 공식 조회 실패는503임. 파일/개수 오류400, 미로그인401, 프로필 소유권 위반403, 다른 회원의 사진은404임.
+- `NOT_FOUND`: 읽기는 성공했으나 실제 공식 후보가 전부0건인 경우임. 처방전·약봉투는 200으로 사진과 이름 배열을 유지하며, 알약은 사진·후보를 정리함.
+- 처방전·약봉투의 전체 공식 조회 실패는 200, `status=FAILED`로 이름 배열과 사진을 유지함. 모델 오류는503임. 파일/개수 오류400, 미로그인401, 프로필 소유권 위반403, 다른 회원의 사진은404임.
 - 모델 대기 최대30초·후보 작업 최대40초·외부 작업 전체85초 예산임. 외부 작업에는 DB 쓰기를 맡기지 않아 시간 초과 후 늦은 결과가 후보를 다시 만들지 못함. 업로드·DB·HTTP 인프라까지 포함한 절대85초 보장은 아님.
-- 이름은 최대10개, 이름당 후보 최대5개임. 허가08 목록/낱알03의 첫100개 결과 안에서 비교함. 알약 각인은 앞뒤를 바꾼 경우도 같은 후보로 비교함. 각인/색만으로 전체 목록을 조회하는 기능은 백로그임.
+- 이름은 최대10개, 이름당 후보 최대5개임. 이름 전용 검색은 `/api/images/identify`와 공통 품목허가08 검색의 첫100개 결과를 사용함. 각인·모양·색상이 있는 알약은 전체 낱알 카탈로그를 대조하며 앞뒤 각인이 바뀌어도 비교함.
 - 공식 응답의 전문/일반은 반드시 확인함. 필수 외형/성분 열에 자료가 없는 경우 `미확인`으로 표시함. 기존 drug 캐시의 상세 값을 빈 정보로 덮어쓰지 않음. 취하 여부는 후보 재조회에서 NULL일 수 있으며 확정 근거·복약 안내는 기존 공식 근거 API가 별도로 검증함.
 
 ## 저장과 정리 경계
@@ -62,7 +64,7 @@ flowchart LR
 
 ## 기존 보조 API
 
-기존 `/api/images/pill-photo/identify`, `/api/images/prescription-photo/identify`는 식별만 하고 즉시 정리하는 무저장 보조 경로임. 기존 `/api/images/profiles/{profileId}/photo-identifications`는 업로드 보조 경로임. 새 화면은 위 정식 경로를 사용해야 후보 보존·재조회·선택 저장이 연결됨. 미머지 브랜치에서 추가됐던 `/api/images/profiles/{profileId}/prescription-photo/identify`는 정식 workflow의 호환 별칭임.
+기존 `/api/images/pill-photo/identify`는 무저장 보조 경로임. 기존 `/api/images/profiles/{profileId}/photo-identifications`는 업로드 보조 경로임. 후보 보존·재조회·선택 저장에는 위 정식 경로를 사용함. `/api/images/profiles/{profileId}/prescription-photo/identify`도 정식 흐름과 동일하게 여러 이름을 photo에 저장하고 각각 공공데이터 검색을 수행함(`namesOnly=true`이면 이름 저장만).
 
 ## 검증 범위
 
@@ -72,4 +74,4 @@ flowchart LR
 
 최종 전체 회귀는 **606개·73스위트·실패/오류/생략0·bootJar 성공**임. 원본 develop582개에 사진/공식 후보 검증24개를 추가한 결과이며 [검증 집계](PHOTO_REGISTRATION_VALIDATION.json)에 실행 조건을 기록함.
 
-REG-004 응답 대조 후속: NOT_FOUND에서도 drugs[].readName/lookup을 남겨 이름 검색어로 쓸 수 있게 함. 사진 ID/행/원본은 계속 정리함. 성공 후보와 GET 재조회는 공식 캐시에 저장된 printFront/printBack/shape/color를 함께 제공함. color는 drug의 일반 색상 표현이며 사진 앞뒤의 색으로 임의 분리하지 않음.
+REG-004 응답 대조 후속: NOT_FOUND에서도 drugs[].readName/lookup을 남겨 이름 검색어로 쓸 수 있게 함. 처방전·약봉투는 사진 ID/행/원본과 이름 배열을 만료 시점까지 유지함. 성공 후보와 GET 재조회는 공식 캐시에 저장된 printFront/printBack/shape/color를 함께 제공함. color는 drug의 일반 색상 표현이며 사진 앞뒤의 색으로 임의 분리하지 않음.

@@ -48,7 +48,7 @@ public class PillIdentificationController {
     }
 
     /** OCR/시각적 식별 값을 입력받아 순위가 매겨진 약물 후보를 반환 */
-    @Operation(summary = "알약 식별 단서로 후보 검색", description = "제품명·업체명 없이 각인·모양·색상만으로 검색 가능. 앞뒤 각인을 함께 대조하여 관련 후보 최대 5개를 반환합니다.")
+    @Operation(summary = "약 이름 또는 알약 식별 단서로 후보 검색", description = "itemName만 입력하면 처방전·약봉투와 같은 공공데이터 품목명 검색을 사용합니다. 각인·모양·색상이 있으면 낱알 목록을 대조합니다. 최대 5개 후보를 반환합니다.")
     @PostMapping("/identify")
     public List<PillIdentificationCandidate> identify(@RequestBody PillIdentification input) {
         return identificationService.identify(input);

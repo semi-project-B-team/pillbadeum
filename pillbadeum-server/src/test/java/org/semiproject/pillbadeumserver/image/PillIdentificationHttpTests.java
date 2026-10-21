@@ -14,6 +14,7 @@ import org.semiproject.pillbadeumserver.common.ai.OpenAiClient;
 import org.semiproject.pillbadeumserver.common.exception.GlobalExceptionHandler;
 import org.semiproject.pillbadeumserver.common.external.PublicDataClient;
 import org.semiproject.pillbadeumserver.common.file.FileStorage;
+import org.semiproject.pillbadeumserver.drug.service.DrugSyncService;
 import org.semiproject.pillbadeumserver.image.controller.PillIdentificationController;
 import org.semiproject.pillbadeumserver.image.service.*;
 import org.springframework.http.MediaType;
@@ -60,6 +61,26 @@ class PillIdentificationHttpTests {
                 """)).andExpect(status().isOk()).andReturn().getResponse();
         assertCandidates(json.readTree(response.getContentAsString(StandardCharsets.UTF_8)));
         verifyNoInteractions(ai, publicData);
+    }
+
+    @Test
+    void itemNameOnlyReusesPrescriptionNameSearchWithoutRequiringPillCatalog() throws Exception {
+        var syrup = Map.of("ITEM_SEQ", "900010", "ITEM_NAME", "합성시럽", "ENTP_NAME", "합성제약", "SPCLTY_PBLC", "일반의약품");
+        when(publicData.get(anyString(), anyMap())).thenReturn(json.valueToTree(Map.of("items", List.of())));
+        when(publicData.get(eq(DrugSyncService.PERMIT_INFO_PATH), anyMap()))
+                .thenReturn(json.valueToTree(Map.of("items", List.of(syrup))));
+        var response = http.perform(post("/api/images/identify").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"itemName\":\"합성시럽\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse();
+        var body = json.readTree(response.getContentAsString(StandardCharsets.UTF_8));
+        var prescription = new PhotoCandidateLookup(publicData, catalog).prescription("합성시럽", null);
+        assertThat(body.size()).isEqualTo(1);
+        assertThat(body.path(0).path("itemSeq").asString()).isEqualTo(prescription.getFirst().itemSeq());
+        assertThat(body.path(0).path("itemName").asString()).isEqualTo("합성시럽");
+        assertThat(body.path(0).path("similarityScore").asDouble()).isEqualTo(100);
+        verify(publicData, times(2)).get(DrugSyncService.PERMIT_INFO_PATH,
+                Map.of("item_name", "합성시럽", "pageNo", 1, "numOfRows", 100));
+        verifyNoInteractions(catalog, ai);
     }
 
     @Test

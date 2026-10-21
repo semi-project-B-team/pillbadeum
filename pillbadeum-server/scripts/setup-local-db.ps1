@@ -19,6 +19,7 @@ $sqlFiles += '06_DRUG_CACHE_METADATA.sql'
 $sqlFiles += '07_DOSE_CONFIRMATION.sql'
 $sqlFiles += '08_CHAT_DUR_SNAPSHOT.sql'
 $sqlFiles += '09_VECTOR_CLEANUP.sql'
+$sqlFiles += '10_PHOTO_MEDICINE_NAMES.sql'
 $sqlPaths = $sqlFiles | ForEach-Object { Join-Path $projectRoot "sql/$_" }
 foreach ($sqlPath in $sqlPaths) {
     if (-not (Test-Path -LiteralPath $sqlPath -PathType Leaf)) {

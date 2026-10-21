@@ -36,12 +36,9 @@ public class PhotoIdentificationController {
 
   @Operation(
       summary = "처방전·약봉투·알약 사진 식별",
-      description = "처방전/약봉투는 image1장, 알약은 front/back2장임. 성공 원본은 확인까지 유지함.")
+      description = "처방전/약봉투 image 1장에서 여러 약 이름을 배열로 저장하고 각 이름별 공공데이터 후보를 조회합니다. 알약은 front/back 각 1장입니다.")
   @PostMapping(
-      value = {
-        "/profiles/{profileId}/photo-identifications",
-        "/images/profiles/{profileId}/prescription-photo/identify"
-      },
+      value = "/profiles/{profileId}/photo-identifications",
       consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public PhotoIdentificationResponse identify(
       @PathVariable long profileId,
@@ -50,7 +47,8 @@ public class PhotoIdentificationController {
       @RequestParam(required = false) MultipartFile image,
       @RequestParam(required = false) MultipartFile front,
       @RequestParam(required = false) MultipartFile back,
-      @RequestParam(required = false) List<MultipartFile> images) {
+      @RequestParam(required = false) List<MultipartFile> images,
+      @RequestParam(defaultValue = "false") boolean namesOnly) {
     List<MultipartFile> input;
     if (images != null) {
       if (image != null || front != null || back != null)
@@ -69,7 +67,30 @@ public class PhotoIdentificationController {
     int uploadedCount = multipart.getMultiFileMap().values().stream().mapToInt(List::size).sum();
     if (uploadedCount != input.size())
       throw new BusinessException(ErrorCode.INVALID_INPUT, "사진 개수를 확인해 주세요.");
-    return workflow.identify(profileId, kind, input);
+    return workflow.identify(profileId, kind, input, namesOnly);
+  }
+
+  @Operation(summary = "처방전·약봉투 약 이름만 추출하여 임시 저장",
+      description = "본인 프로필의 photo.medicine_names에 약 이름 배열을 30분 임시 저장합니다. /1정 같은 수량을 제외하고 공공데이터 후보 검색은 호출하지 않습니다.")
+  @PostMapping(value = "/profiles/{profileId}/photo-name-extractions",
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public PhotoIdentificationResponse extractMedicineNames(@PathVariable long profileId, MultipartHttpServletRequest multipart,
+      @RequestParam(defaultValue = "PRESCRIPTION") ImagePhotoKind kind,
+      @RequestParam(required = false) MultipartFile image,
+      @RequestParam(required = false) List<MultipartFile> images) {
+    return identify(profileId, multipart, kind, image, null, null, images, true);
+  }
+
+  @Operation(summary = "처방전·약봉투의 여러 약 이름 식별 및 약별 후보 조회",
+      description = "모든 약 이름을 medicineNames 배열로 임시 저장하고 drugs 배열의 이름별 후보를 각각 조회합니다. 이름만 저장하려면 namesOnly=true를 지정합니다.")
+  @PostMapping(value = "/images/profiles/{profileId}/prescription-photo/identify", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public PhotoIdentificationResponse identifyPrescription(@PathVariable long profileId, MultipartHttpServletRequest multipart,
+      @RequestParam(defaultValue = "PRESCRIPTION") ImagePhotoKind kind,
+      @RequestParam(required = false) MultipartFile image,
+      @RequestParam(required = false) List<MultipartFile> images,
+      @RequestParam(defaultValue = "false") boolean namesOnly) {
+    if (kind == ImagePhotoKind.PILL) throw new BusinessException(ErrorCode.INVALID_INPUT, "처방전 또는 약봉투 사진을 올려 주세요.");
+    return identify(profileId, multipart, kind, image, null, null, images, namesOnly);
   }
 
   @Operation(summary = "본인 사진의 저장된 후보 재조회")

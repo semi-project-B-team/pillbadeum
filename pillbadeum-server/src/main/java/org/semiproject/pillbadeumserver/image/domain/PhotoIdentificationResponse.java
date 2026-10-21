@@ -11,7 +11,17 @@ public record PhotoIdentificationResponse(
     PillIdentification clues,
     Boolean printMatched,
     List<DrugGroup> drugs,
-    List<Candidate> candidates) {
+    List<Candidate> candidates,
+    List<String> medicineNames) {
+  public PhotoIdentificationResponse(ImagePhotoKind kind, Long photoId, List<Long> photoIds, String status,
+      PillIdentification clues, Boolean printMatched, List<DrugGroup> drugs, List<Candidate> candidates) {
+    this(kind, photoId, photoIds, status, clues, printMatched, drugs, candidates,
+        kind == ImagePhotoKind.PILL || drugs == null ? List.of() : drugs.stream().map(DrugGroup::readName).toList());
+  }
+
+  public PhotoIdentificationResponse {
+    medicineNames = medicineNames == null ? List.of() : List.copyOf(medicineNames);
+  }
   public record DrugGroup(int readNo, String readName, String lookup, List<Candidate> candidates) {}
 
   public record Candidate(

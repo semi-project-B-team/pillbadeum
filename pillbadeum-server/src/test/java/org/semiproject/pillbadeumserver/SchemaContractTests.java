@@ -29,7 +29,7 @@ class SchemaContractTests {
                     .as("Only the dedicated pill_test database may be modified").isEqualTo(1);
             org.semiproject.pillbadeumserver.TestDatabaseSchema.prepare(connection);
             assertThat(count(connection, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE()"))
-                    .isEqualTo(133);
+                    .isEqualTo(134);
             assertConstraintCount(connection, "PRIMARY KEY", 17);
             assertConstraintCount(connection, "FOREIGN KEY", 18);
             assertConstraintCount(connection, "UNIQUE", 4);
@@ -59,6 +59,7 @@ class SchemaContractTests {
             assertColumn(connection, "drug", "etc_otc", "varchar", 10L, "NO", null);
             assertColumn(connection, "drug", "material", "varchar", 30L, "NO", null);
             assertColumn(connection, "photo", "kind", "varchar", 30L, "NO", null);
+            assertColumn(connection, "photo", "medicine_names", "json", null, "YES", null);
             assertColumn(connection, "photo", "front_photo_id", "bigint", null, "YES", null);
             assertColumn(connection, "ocr_candidate", "item_seq", "varchar", 100L, "YES", null);
             assertColumn(connection, "dur_interaction", "item_seq2", "varchar", 100L, "NO", null);

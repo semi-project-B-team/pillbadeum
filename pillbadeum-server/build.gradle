@@ -121,3 +121,11 @@ tasks.register('syncPillCatalog', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.semiproject.pillbadeumserver.chat.PillCatalogCli'
 }
+
+tasks.register('preparePhotoNameStorage', JavaExec) {
+    group = 'verification'
+    description = '로컬 photo 약 이름 JSON 열 확인 (명시적 --args=apply일 때만 SQL 10 적용)'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.semiproject.pillbadeumserver.image.PhotoNamesStorageCli'
+}

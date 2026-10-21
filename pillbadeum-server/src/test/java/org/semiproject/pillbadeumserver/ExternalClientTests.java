@@ -294,6 +294,10 @@ class ExternalClientTests {
                     {"response":{"header":{"resultCode":"00"},"body":{"totalCount":0,"items":[]}}}
                     """);
         });
+        server.createContext("/1471000/DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnInq08", exchange -> {
+            query.set(exchange.getRequestURI().getRawQuery());
+            respond(exchange, 200, "{\"response\":{\"header\":{\"resultCode\":\"00\"},\"body\":{\"items\":[]}}}");
+        });
         new ApplicationContextRunner()
                 .withBean(ObjectMapper.class, () -> JSON)
                 .withUserConfiguration(PillDrugIdentificationService.class, PublicDataClient.class, PillCatalog.class)
@@ -323,7 +327,7 @@ class ExternalClientTests {
         server.createContext("/1471000/DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnInq08", exchange ->
                 respond(exchange, 200, """
                         {"response":{"header":{"resultCode":"00"},"body":{"items":[
-                        {"ITEM_SEQ":"900001","SPCLTY_PBLC":"일반의약품"}]}}}
+                        {"ITEM_SEQ":"900001","ITEM_NAME":"합성약","SPCLTY_PBLC":"일반의약품"}]}}}
                         """));
         server.createContext("/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList", exchange ->
                 respond(exchange, 200, """

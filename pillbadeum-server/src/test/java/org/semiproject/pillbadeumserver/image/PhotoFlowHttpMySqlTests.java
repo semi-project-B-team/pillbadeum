@@ -330,10 +330,12 @@ class PhotoFlowHttpMySqlTests {
     vision = prescription("없음");
     var notFound = identify("PRESCRIPTION", token, 200, "image");
     assertThat(notFound.path("status").asString()).isEqualTo("NOT_FOUND");
-    assertThat(notFound.path("photoId").isNull()).isTrue();
+    assertThat(notFound.path("photoId").asLong()).isPositive();
     assertThat(notFound.path("drugs").path(0).path("readName").asString()).isEqualTo("없음");
     assertThat(notFound.path("drugs").path(0).path("lookup").asString()).isEqualTo("NOT_FOUND");
     assertThat(notFound.path("drugs").path(0).path("candidates").isEmpty()).isTrue();
+    assertThat(notFound.path("medicineNames").path(0).asString()).isEqualTo("없음");
+    json("DELETE", "/api/photos/" + notFound.path("photoId").asLong(), null, token, 204);
     assertNoPhotos();
     vision = Map.of("readable", false, "medicines", List.of());
     assertThat(identify("MEDICINE_BAG", token, 200, "image").path("status").asString())
@@ -345,7 +347,7 @@ class PhotoFlowHttpMySqlTests {
   }
 
   @Test
-  void partialPublicFailureStaysPerCardAndAllFailureIs503WithCleanup() throws Exception {
+  void partialAndCompletePublicFailureKeepEachNameAndItsStatus() throws Exception {
     vision = prescription("합성약정", "실패", "없음");
     var result = identify("PRESCRIPTION", token, 200, "image");
     assertThat(result.path("drugs").path(0).path("lookup").asString()).isEqualTo("OK");
@@ -353,7 +355,10 @@ class PhotoFlowHttpMySqlTests {
     assertThat(result.path("drugs").path(2).path("lookup").asString()).isEqualTo("NOT_FOUND");
     json("DELETE", "/api/photos/" + result.path("photoId").asLong(), null, token, 204);
     vision = prescription("실패");
-    identify("PRESCRIPTION", token, 503, "image");
+    var failed = identify("PRESCRIPTION", token, 200, "image");
+    assertThat(failed.path("status").asString()).isEqualTo("FAILED");
+    assertThat(failed.path("medicineNames").path(0).asString()).isEqualTo("실패");
+    json("DELETE", "/api/photos/" + failed.path("photoId").asLong(), null, token, 204);
     assertNoPhotos();
   }
 

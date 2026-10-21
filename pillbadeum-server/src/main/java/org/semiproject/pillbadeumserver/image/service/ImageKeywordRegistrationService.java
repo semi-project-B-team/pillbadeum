@@ -13,14 +13,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import tools.jackson.databind.ObjectMapper;
 
 /** REG-003~007: 사진/공식 후보만 짧은 트랜잭션으로 저장한다. 외부 API와 파일 IO는 호출자가 수행한다. */
 @Service
 public class ImageKeywordRegistrationService {
   private final JdbcTemplate jdbc;
+  private final ObjectMapper json;
 
-  public ImageKeywordRegistrationService(JdbcTemplate jdbc) {
+  public ImageKeywordRegistrationService(JdbcTemplate jdbc, ObjectMapper json) {
     this.jdbc = jdbc;
+    this.json = json;
   }
 
   public record Photo(
@@ -32,7 +35,8 @@ public class ImageKeywordRegistrationService {
       String path,
       String mime,
       String status,
-      LocalDateTime uploadedAt) {}
+      LocalDateTime uploadedAt,
+      List<String> medicineNames) {}
 
   @Transactional
   public List<Long> uploaded(
@@ -70,23 +74,39 @@ public class ImageKeywordRegistrationService {
   }
 
   @Transactional
+  public void saveExtractedNames(long photoId, List<String> names) {
+    Photo root = owned(photoId, true);
+    checkFresh(root);
+    if (root.kind() == ImagePhotoKind.PILL || !"UPLOADED".equals(root.status())) throw invalid("이름을 저장할 수 없는 사진입니다.");
+    var medicineNames = MedicineNameNormalizer.distinct(names);
+    if (medicineNames.isEmpty()) throw invalid("읽은 약 이름이 없습니다.");
+    jdbc.update("UPDATE photo SET medicine_names=? WHERE photo_id=?", json.writeValueAsString(medicineNames), root.id());
+  }
+
+  @Transactional
   public void identified(long photoId, List<PhotoCandidateData.Group> groups) {
     Photo root = owned(photoId, true);
     checkFresh(root);
     if (!"UPLOADED".equals(root.status())) throw invalid("이미 처리된 사진입니다.");
     for (var group : groups) {
-      if (group.candidates().isEmpty()) insertCandidate(root.id(), group, null, 1);
+      if (root.kind() != ImagePhotoKind.PILL && "EXTRACTED".equals(group.lookup())) continue;
+      if (group.candidates().isEmpty()) insertCandidate(root.id(), group, null, 1, root.kind() != ImagePhotoKind.PILL);
       else
         for (int i = 0; i < group.candidates().size(); i++) {
           var candidate = group.candidates().get(i);
           cache(candidate, root.kind() == ImagePhotoKind.PILL ? "GRAIN" : "PERMIT");
-          insertCandidate(root.id(), group, candidate, i + 1);
+          insertCandidate(root.id(), group, candidate, i + 1, root.kind() != ImagePhotoKind.PILL);
         }
     }
     jdbc.update(
         "UPDATE photo SET status='IDENTIFIED' WHERE photo_id=? OR front_photo_id=?",
         root.id(),
         root.id());
+    if (root.kind() != ImagePhotoKind.PILL) {
+      var medicineNames = MedicineNameNormalizer.distinct(groups.stream().map(PhotoCandidateData.Group::readName).toList());
+      if (!root.medicineNames().equals(medicineNames)) jdbc.update("UPDATE photo SET medicine_names=? WHERE photo_id=?",
+          json.writeValueAsString(medicineNames), root.id());
+    }
   }
 
   private void cache(PhotoCandidateData c, String source) {
@@ -116,14 +136,14 @@ public class ImageKeywordRegistrationService {
   }
 
   private void insertCandidate(
-      long photoId, PhotoCandidateData.Group group, PhotoCandidateData c, int rank) {
+      long photoId, PhotoCandidateData.Group group, PhotoCandidateData c, int rank, boolean normalizeName) {
     jdbc.update(
         "INSERT INTO"
             + " ocr_candidate(photo_id,read_no,read_name,item_seq,candidate_rank,lookup_status,print_matched)"
             + " VALUES(?,?,?,?,?,?,?)",
         photoId,
         group.readNo(),
-        group.readName(),
+        normalizeName ? MedicineNameNormalizer.normalize(group.readName()) : group.readName(),
         c == null ? null : c.itemSeq(),
         rank,
         group.lookup(),
@@ -135,7 +155,7 @@ public class ImageKeywordRegistrationService {
     List<Photo> found =
         jdbc.query(
             "SELECT * FROM photo WHERE photo_id=?" + (lock ? " FOR UPDATE" : ""),
-            ImageKeywordRegistrationService::row,
+            this::row,
             photoId);
     if (found.isEmpty() || found.getFirst().memberId() != SecurityUtil.getCurrentMemberId())
       throw new NotFoundException("사진을 찾을 수 없습니다.");
@@ -157,7 +177,7 @@ public class ImageKeywordRegistrationService {
   public List<Photo> members(long rootId) {
     return jdbc.query(
         "SELECT * FROM photo WHERE photo_id=? OR front_photo_id=? ORDER BY photo_id",
-        ImageKeywordRegistrationService::row,
+        this::row,
         rootId,
         rootId);
   }
@@ -214,6 +234,10 @@ public class ImageKeywordRegistrationService {
           new PhotoIdentificationResponse.DrugGroup(
               entry.getKey(), (String) first.get("read_name"), lookup, List.copyOf(candidates)));
     }
+    if (groups.isEmpty() && p.kind() != ImagePhotoKind.PILL) {
+      for (String name : p.medicineNames()) groups.add(new PhotoIdentificationResponse.DrugGroup(
+          groups.size() + 1, name, "EXTRACTED", List.of()));
+    }
     var candidates =
         p.kind() == ImagePhotoKind.PILL
             ? groups.stream().flatMap(g -> g.candidates().stream()).toList()
@@ -226,11 +250,20 @@ public class ImageKeywordRegistrationService {
         p.kind(),
         p.id(),
         members(p.id()).stream().map(Photo::id).toList(),
-        "OK",
+        p.kind() == ImagePhotoKind.PILL ? "OK" : lookupStatus(groups),
         null,
         matched,
         List.copyOf(groups),
-        candidates);
+        candidates,
+        p.medicineNames());
+  }
+
+  private static String lookupStatus(List<PhotoIdentificationResponse.DrugGroup> groups) {
+    if (groups.isEmpty()) return "NOT_FOUND";
+    if (groups.stream().allMatch(g -> Set.of("OK", "EXTRACTED").contains(g.lookup()))) return "OK";
+    if (groups.stream().allMatch(g -> "FAILED".equals(g.lookup()))) return "FAILED";
+    if (groups.stream().allMatch(g -> "NOT_FOUND".equals(g.lookup()))) return "NOT_FOUND";
+    return "PARTIAL";
   }
 
   /** 같은 프로필 선택 저장을 직렬화한다. 다른 회원의 ID로 잠금을 얻거나 행을 만들지 않는다. */
@@ -287,7 +320,7 @@ public class ImageKeywordRegistrationService {
     jdbc.update("DELETE FROM photo WHERE profile_id=?", profileId);
   }
 
-  private static Photo row(ResultSet rs, int index) throws SQLException {
+  private Photo row(ResultSet rs, int index) throws SQLException {
     return new Photo(
         rs.getLong("photo_id"),
         rs.getLong("member_id"),
@@ -297,7 +330,17 @@ public class ImageKeywordRegistrationService {
         rs.getString("temp_path"),
         rs.getString("mime_type"),
         rs.getString("status"),
-        rs.getObject("uploaded_at", LocalDateTime.class));
+        rs.getObject("uploaded_at", LocalDateTime.class),
+        medicineNames(rs.getString("medicine_names")));
+  }
+
+  private List<String> medicineNames(String stored) {
+    if (stored == null) return List.of();
+    var node = json.readTree(stored);
+    if (!node.isArray()) return List.of();
+    List<String> names = new ArrayList<>();
+    node.forEach(value -> { if (value.isString()) names.add(value.asString()); });
+    return MedicineNameNormalizer.distinct(names);
   }
 
   private static String mime(String name) {

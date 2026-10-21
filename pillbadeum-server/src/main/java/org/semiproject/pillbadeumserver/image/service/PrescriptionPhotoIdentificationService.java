@@ -30,7 +30,8 @@ public class PrescriptionPhotoIdentificationService {
     private static final String INSTRUCTIONS = """
             처방전 또는 약봉투 사진에서 처방/조제된 의약품의 제품명을 읽으세요.
             환자명, 생년월일, 주소, 병원명, 처방 날짜 등 개인정보는 읽거나 반환하지 마세요.
-            약품명은 인쇄된 제품명을 가능한 한 원문 그대로 적고, 용량이나 복용법은 이름에 합치지 마세요.
+            약품명은 인쇄된 제품명을 가능한 한 원문 그대로 적고, 복용 수량이나 복용법은 이름에 합치지 마세요.
+            제품명에 포함된 함량(5mg·10밀리그램)은 유지하고 /1정·/0.5정·/1캡슐 같은 복용 수량은 제외하세요.
             약품명을 확신할 수 없는 항목은 제외하고, 같은 제품명은 한 번만 반환하세요.
             """;
 
@@ -111,9 +112,8 @@ public class PrescriptionPhotoIdentificationService {
         JsonNode medicines = output.path("medicines");
         if (medicines.isArray()) {
             for (JsonNode medicine : medicines) {
-                String name = medicine.path("readName").asString("").strip();
-                if (name.length() >= DrugSearchService.MIN_NAME_LENGTH
-                        && name.length() <= DrugSearchService.MAX_NAME_LENGTH) {
+                String name = MedicineNameNormalizer.normalize(medicine.path("readName").asString(""));
+                if (name != null) {
                     names.add(name);
                 }
             }

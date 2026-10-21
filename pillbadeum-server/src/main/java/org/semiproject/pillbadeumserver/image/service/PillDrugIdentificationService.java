@@ -24,7 +24,10 @@ public class PillDrugIdentificationService {
     public List<PillIdentificationCandidate> identify(PillIdentification input) {
         if (!PillSimilarity.hasCriteria(input)) throw new BusinessException(ErrorCode.INVALID_INPUT,
                 "약 이름, 각인, 모양 또는 색상 중 하나 이상이 필요합니다.");
-        List<PillSimilarity.Match> ranked = PillSimilarity.rank(input, catalog.rows()).stream().limit(5).toList();
+        boolean visual = PillSimilarity.hasVisualCriteria(input);
+        // Reuse the same official name lookup as prescription/bag names, including non-pill products.
+        var rows = visual ? catalog.rows() : MedicineNameSearch.rows(publicData, input.itemName(), input.entpName());
+        List<PillSimilarity.Match> ranked = PillSimilarity.rank(input, rows).stream().limit(5).toList();
         List<PillIdentificationCandidate> result = new ArrayList<>();
         for (int index = 0; index < ranked.size(); index++) {
             var match = ranked.get(index);
@@ -32,7 +35,7 @@ public class PillDrugIdentificationService {
             if (PillSimilarity.present(input.itemName()) || PillSimilarity.present(input.entpName())) {
                 String code = text(match.item(), "ITEM_SEQ");
                 // Optional guide failures must not erase valid identification candidates.
-                permit = findByItemSeq(PRODUCT_PERMIT_PATH, "item_seq", "ITEM_SEQ", code, text(match.item(), "ITEM_NAME"));
+                permit = visual ? findByItemSeq(PRODUCT_PERMIT_PATH, "item_seq", "ITEM_SEQ", code, text(match.item(), "ITEM_NAME")) : match.item();
                 easy = findByItemSeq(EASY_DRUG_PATH, "itemSeq", "itemSeq", code, null);
             }
             result.add(toCandidate(index + 1, match, permit, easy));
