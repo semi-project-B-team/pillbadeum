@@ -26,7 +26,6 @@ import tools.jackson.databind.JsonNode;
 public class DurLookupService {
     private static final Logger log = LoggerFactory.getLogger(DurLookupService.class);
     private static final int PAGE_SIZE = 100;
-    private static final int MAX_ROWS = 200;
     private final PublicDataClient client;
     private final AsyncTaskExecutor executor;
     private final int batchSize;
@@ -39,7 +38,7 @@ public class DurLookupService {
         this.batchSize = Math.max(1, Math.min(10, concurrency));
     }
 
-    /** 전체 등록 목록을 중복 제거한다. 최대 10품목을 조회하고 초과 품목은 미확인 결과로 남긴다. */
+    /** 전체 등록 목록을 중복 제거한다. 요청 시간 안에서 모든 품목을 조회하고 실패 유형을 미확인으로 남긴다. */
     public List<DurLookup> collect(AnswerInput input, ChatDeadline requestDeadline) {
         LocalDate today = LocalDate.now(TimeZoneConfig.ZONE);
         var unique = new LinkedHashMap<String, AnswerInput.Medication>();
@@ -54,17 +53,13 @@ public class DurLookupService {
         var unique = itemSeqs.stream().distinct().toList();
         var orderedTypes = types.isEmpty() ? EnumSet.noneOf(DurLookup.Type.class) : EnumSet.copyOf(types);
         var requests = new ArrayList<Request>();
-        int index = 0;
         var results = new ArrayList<DurLookup>();
         for (String code : unique) {
             for (var type : orderedTypes) {
-                if (index < 10) requests.add(new Request(code, type));
-                else results.add(DurLookup.failed(code, type, today));
+                requests.add(new Request(code, type));
             }
-            index++;
         }
         var deadline = requestDeadline.within(Duration.ofSeconds(30));
-        int remaining = 24_000;
         for (int offset = 0; offset < requests.size(); offset += batchSize) {
             var batch = requests.subList(offset, Math.min(requests.size(), offset + batchSize));
             var tasks = new ArrayList<Future<DurLookup>>();
@@ -74,11 +69,6 @@ public class DurLookupService {
                     DurLookup lookup;
                     try { lookup = deadline.await(tasks.get(i)); }
                     catch (BusinessException exception) { lookup = DurLookup.failed(batch.get(i).code(), batch.get(i).type(), today); }
-                    int size = lookup.rows().stream().mapToInt(row -> row.content().length() + row.ingredient().length()
-                            + row.effect().length() + (row.partnerItemSeq() == null ? 0 : row.partnerItemSeq().length())).sum();
-                    // 금기 내용을 중간에서 자르지 않고 초과한 유형 전체를 미확인으로 처리한다.
-                    if (size > remaining) lookup = DurLookup.failed(lookup.itemSeq(), lookup.type(), today);
-                    else remaining -= size;
                     results.add(lookup);
                 }
             } finally {
@@ -110,7 +100,7 @@ public class DurLookupService {
                 String count = body.path("totalCount").asString("");
                 if (!count.matches("\\d{1,9}")) throw invalid();
                 int total = Integer.parseInt(count);
-                if (total > MAX_ROWS || (expectedTotal != -1 && expectedTotal != total)) throw invalid();
+                if (expectedTotal != -1 && expectedTotal != total) throw invalid();
                 expectedTotal = total;
                 if (body.has("pageNo") && body.path("pageNo").asInt(-1) != page) throw invalid();
                 var items = PublicDataClient.items(body);

@@ -117,6 +117,22 @@ class DurExternalTests {
         assertThat(requests).hasSize(2);
     }
 
+    @Test
+    void allThreePagesAboveTheOldTwoHundredRowLimitAreRetained() {
+        responder.set(r -> {
+            var values = new ArrayList<Map<String, String>>();
+            for (int i = (r.page() - 1) * 100; i < Math.min(r.page() * 100, 201); i++) {
+                var value = new LinkedHashMap<>(row(r.code(), r.type(), "12세 미만"));
+                value.put("INGR_NAME", "성분" + i); values.add(value);
+            }
+            return success(201, r.page(), values);
+        });
+        var result = collect("A").getFirst();
+        assertThat(result.success()).isTrue();
+        assertThat(result.rows()).hasSize(201);
+        assertThat(requests).extracting(Request::page).containsExactly(1, 2, 3);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"wrong-code", "wrong-type", "blank-content", "missing-header", "oversized-total", "non-string-field", "contradictory-zero"})
     void malformedOrUnboundedResultsAreUnavailable(String scenario) {
@@ -145,7 +161,9 @@ class DurExternalTests {
         responder.set(r -> success(1, r.page(), List.of(row(r.code(), r.type(), "x".repeat(8_001)))));
         assertThat(collect("A").getFirst().success()).isFalse();
         responder.set(r -> success(6, r.page(), IntStream.range(0, 6).mapToObj(i -> row(r.code(), r.type(), i + "x".repeat(5000))).toList()));
-        assertThat(collect("A").getFirst().success()).isFalse();
+        var large = collect("A").getFirst();
+        assertThat(large.success()).isTrue();
+        assertThat(large.rows()).hasSize(6).allSatisfy(row -> assertThat(row.content().length()).isEqualTo(5001));
     }
 
     @Test
@@ -161,17 +179,17 @@ class DurExternalTests {
     }
 
     @Test
-    void duplicateRegistrationsAreOneLookupAndOmittedDrugsRemainUnchecked() {
+    void duplicateRegistrationsAreOneLookupAndEleventhDrugIsAlsoChecked() {
         var codes = new ArrayList<>(IntStream.range(0, 11).mapToObj(i -> "C" + i).toList());
         codes.addFirst("C0");
         var input = input(codes, "MALE", false);
         var results = service.collect(input, deadline());
         var notice = new DurEvaluator().evaluate(input, results).notice();
-        assertThat(requests).hasSize(20); // 열 품목 × 연령·병용이며 노인·임부는 적용 대상이 아니다.
-        assertThat(requests).noneMatch(r -> r.code().equals("C10"));
-        assertThat(notice.lookup()).isEqualTo("PARTIAL");
-        assertThat(notice.checkedCount()).isEqualTo(10);
-        assertThat(notice.uncheckedDrugNames()).containsExactly("drug-C10");
+        assertThat(requests).hasSize(22);
+        assertThat(requests).anyMatch(r -> r.code().equals("C10"));
+        assertThat(notice.lookup()).isEqualTo("ALL");
+        assertThat(notice.checkedCount()).isEqualTo(11);
+        assertThat(notice.uncheckedDrugNames()).isEmpty();
     }
 
     @Test
