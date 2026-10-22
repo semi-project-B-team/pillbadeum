@@ -1,5 +1,5 @@
 -- 선택 실행: 테이블만 만든 비어 있는 개발 DB에 한 번만 실행하세요.
--- 실제 사용자 DB에는 실행하지 않습니다. 로그인 API는 아직 구현되지 않았습니다.
+-- 최신01 적용 뒤 빈 개발DB에서만 실행함. 실제 사용자DB와 검증 전 로그인 fixture에는 사용하지 않음.
 -- 약 item_seq와 약 이름/제조사의 조합은 공식 검증되지 않은 화면/DB용 fixture입니다.
 -- 실제 공공데이터 호출 테스트에는 공식 응답으로 검증한 코드로 별도 준비하세요.
 -- photo/ocr_candidate/dur_warning/dur_interaction은 실제 처리 시 생성하므로 초기에는 비웁니다.
@@ -25,7 +25,7 @@ INSERT INTO consent (terms_type, terms_version, terms_title, terms_content, is_r
 
 -- 3-3. 회원당 본인·가족 프로필 3개, 총 15개
 -- 자동 증가 시작값과 관계없이 이메일로 방금 넣은 회원을 연결합니다.
-INSERT INTO profile (member_id, profile_name, realationship_type, profile_birth_year, profile_gender, profile_height, profile_weight, profile_pregnant, created_at, updated_at) VALUES
+INSERT INTO profile (member_id, profile_name, relationship_type, profile_birth_year, profile_gender, profile_height, profile_weight, profile_pregnant, created_at, updated_at) VALUES
 ((SELECT member_id FROM member WHERE email = 'minji@pillbadeum.com'), '민지', 'SELF', 1995, 'FEMALE', 163, 52, FALSE, '2026-10-01 09:00:00', '2026-10-01 09:00:00'),
 ((SELECT member_id FROM member WHERE email = 'minji@pillbadeum.com'), '엄마', 'MOTHER', 1968, 'FEMALE', 158, 57, FALSE, '2026-10-01 09:00:00', '2026-10-01 09:00:00'),
 ((SELECT member_id FROM member WHERE email = 'minji@pillbadeum.com'), '아들 도윤', 'CHILD', 2020, 'MALE', 105, 17, FALSE, '2026-10-01 09:00:00', '2026-10-01 09:00:00'),
@@ -60,7 +60,7 @@ INSERT INTO notification_setting (member_id, push_enabled, updated_at) VALUES
 ((SELECT member_id FROM member WHERE email = 'junho@pillbadeum.com'), FALSE, '2026-10-10 08:05:00');
 
 -- 3-6. 의약품 샘플 2개: 분류값은 ETC·OTC로 통일
-INSERT INTO drug (item_seq, name, maker, etc_otc, class_name, shape, color, form, matrial, synced_at) VALUES
+INSERT INTO drug (item_seq, name, maker, etc_otc, class_name, shape, color, form, material, synced_at) VALUES
 ('202600001', '타이레놀정500밀리그램', '한국얀센', 'OTC', '해열·진통·소염제', '장방형', '흰색', '정제', '아세트아미노펜', '2026-10-10 00:00:00'),
 ('202600004', '아모디핀정5밀리그램', '한미약품', 'ETC', '혈압강하제', '원형', '흰색', '정제', '암로디핀베실산염', '2026-10-10 00:00:00');
 

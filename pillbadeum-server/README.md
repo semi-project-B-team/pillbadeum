@@ -58,21 +58,14 @@ Python: `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
 ### 신규 DB: 설치된 MySQL / Workbench
 
-관리자 연결에서 `sql/00_PILLBADEUM_DB_CREAT.sql` 실행 후 pilldb를 선택하고
-원본 `sql/01_PILLBADEUM_DB_SCRIPT.sql`, 필요하면 02 샘플, `sql/03_MEDICATION_UPDATE.sql` → `sql/04_MY_DRUG_COMPOSITE_UNIQUE.sql` → `sql/05_PHOTO_CANDIDATE_LINKS.sql`을 같은 연결에서 순서대로 실행함.
+처음 설치는 서버 폴더에서 아래 명령 한 번으로 준비함. 00이 개발 DB/계정을 만들고 01이 최신 18개 테이블·146개 컬럼을 생성함. 성분명은 처음부터 100자이며 03~11은 신규 설치에 필요하지 않음.
 
 ```powershell
 .\scripts\setup-local-db.ps1
 ```
 
-클라이언트를 못 찾으면 `-MySqlClient 'C:\...\mysql.exe'`를 지정합니다.
-스키마는 사용자가 제공한 **ERD Cloud 기준 MySQL 14개 테이블·114개 컬럼**입니다.
-01은 원본 14개 테이블 구조이며, 03이 복약지도 변경을 더하고, 04·05 적용까지 마치면 16개 테이블·127개 컬럼으로 맞춤.
-테이블명은 소문자로 통일하고 `photo.kind`는 `VARCHAR(30)`으로 반영했습니다.
-`chat_session.snap_pregnant`의 자료형은 `BOOLEAN`으로 맞췄으며 기존 NULL 허용은 유지합니다.
-`drug.etc_otc`는 UNIQUE를 제거하고 `NOT NULL`과 `chk_drug_type CHECK (etc_otc IN ('ETC', 'OTC'))`를 적용했습니다.
-일정만 삭제하고 약은 유지하도록 `my_drug.start_date/end_date/dose_times`는 NULL을 허용하며 세 값을 함께 채우거나 비우도록 CHECK를 적용했습니다.
-기존 00~02는 GitHub 원본을 유지하고 복약지도 변경은 [통합 SQL](sql/03_MEDICATION_UPDATE.sql) 하나로 적용합니다. 기존 원본 DB와 예전 변경을 일부 적용한 DB 모두 03 전체를 실행하고 마지막 READY를 확인합니다. 적용된 항목은 건너뜁니다. 자세한 순서는 [SQL 안내](sql/README.md)를 참고하세요.
+이미 사용 중인 팀 DB에 변경이 누락되었다면 `.\scripts\setup-local-db.ps1 -UpgradeExisting`으로 03~11을 적용함. 최신 01은 기존 컬럼을 업그레이드하는 파일이 아님. 00~10까지 적용한 DB는 11만 실행해도 됨. 클라이언트를 못 찾으면 `-MySqlClient 'C:\...\mysql.exe'`를 지정함. [신규/기존 DB별 안내](sql/README.md)에 파일 역할과 READY 확인을 정리함.
+
 일정 API·삭제 동작은 [복약 일정 안내](docs/MEDICATION_SCHEDULE.md)를 참고하세요.
 실시간 음성 대화 테스트는 [GPT-Live 안내](docs/MEDICATION_LIVE.md)를 참고하세요. local 실행 후 `/dev/medication-live`에서 시작합니다.
 프론트 전달 기준은 [복약지도 연결 계약](docs/MEDICATION_FRONTEND_HANDOFF.md), 실행 방법과 확인 결과는 [백엔드 검증 기록](docs/MEDICATION_VERIFICATION.md)에 정리했습니다. 복약 완료 체크·실제 복용 기록은 구현 범위에서 제외합니다.
@@ -87,9 +80,6 @@ Qdrant는 별도이며 MySQL `vector_point` 테이블은 만들지 않습니다.
 ```text
 docker compose up -d --wait
 docker compose exec mysql mysql -u pill -p pilldb -e "source /sql/01_PILLBADEUM_DB_SCRIPT.sql"
-docker compose exec mysql mysql -u pill -p pilldb -e "source /sql/03_MEDICATION_UPDATE.sql"
-docker compose exec mysql mysql -u pill -p pilldb -e "source /sql/04_MY_DRUG_COMPOSITE_UNIQUE.sql"
-docker compose exec mysql mysql -u pill -p pilldb -e "source /sql/05_PHOTO_CANDIDATE_LINKS.sql"
 ```
 
 데이터는 named volume에 보존합니다. `.env` 변경만으로 기존 volume의 계정 비밀번호가 바뀌지 않습니다.
