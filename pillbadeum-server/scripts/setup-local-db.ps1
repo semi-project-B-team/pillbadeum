@@ -20,6 +20,7 @@ $sqlFiles += '07_DOSE_CONFIRMATION.sql'
 $sqlFiles += '08_CHAT_DUR_SNAPSHOT.sql'
 $sqlFiles += '09_VECTOR_CLEANUP.sql'
 $sqlFiles += '10_PILL_IDENTIFICATION_SESSION.sql'
+$sqlFiles += '11_DRUG_INGREDIENT_LENGTH.sql'
 $sqlPaths = $sqlFiles | ForEach-Object { Join-Path $projectRoot "sql/$_" }
 foreach ($sqlPath in $sqlPaths) {
     if (-not (Test-Path -LiteralPath $sqlPath -PathType Leaf)) {
@@ -83,6 +84,7 @@ Write-Host '04_MY_DRUG_COMPOSITE_UNIQUE.sql adds pair uniqueness. Its final my_d
 Write-Host '05_PHOTO_CANDIDATE_LINKS.sql connects candidate codes and front/back photos. Its final photo_links_status must be READY.'
 Write-Host '06-09 add metadata, dose confirmation, DUR snapshots and durable vector cleanup. Each final status must be READY.'
 Write-Host '10 adds expiring pill identification results. Existing drug, photo and source columns stay compatible.'
+Write-Host '11 widens drug.material to 100 characters without cutting existing values. ingredient_patch_status must be READY.'
 Write-Host 'Use an empty development database for the ERD Cloud schema. For existing databases, read sql/README.md first.'
 Write-Host 'Copy .env.example to .env if needed, then fill DB_USERNAME, DB_PASSWORD and JWT_SECRET.'
 Write-Host 'Run .\gradlew.bat bootRun from the project directory.'

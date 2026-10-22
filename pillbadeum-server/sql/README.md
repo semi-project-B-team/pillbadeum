@@ -11,6 +11,7 @@ GitHub develop e7c5338의 기존 00~02번은 내용 그대로 유지합니다. �
 | `04_MY_DRUG_COMPOSITE_UNIQUE.sql` | 같은 프로필·공식 품목의 중복 등록 방지 |
 | `05_PHOTO_CANDIDATE_LINKS.sql` | 앞뒤 사진 연결과 OCR 후보의 공식 품목코드 연결 |
 | `10_PILL_IDENTIFICATION_SESSION.sql` | 낱알 사진·직접 보완 결과의 30분 임시 보관 |
+| `11_DRUG_INGREDIENT_LENGTH.sql` | 성분명100자 확장·기존 값 보존 |
 
 ## 새 DB
 
@@ -21,15 +22,16 @@ GitHub develop e7c5338의 기존 00~02번은 내용 그대로 유지합니다. �
 5. 04 실행 후 마지막 my_drug_unique_status가 READY인지 확인.
 6. 05 실행 후 마지막 photo_links_status가 READY인지 확인함.
 7. 06 → 07 → 08 → 09를 순서대로 전체 실행하고 각 마지막 상태 READY를 확인함.
-8. 10 실행 후 pill_identification_session 표가 생성된 것을 확인하고 최신 서버를 실행함.
+8. 10 실행 후 pill_identification_session 표 생성을 확인함.
+9. 11 실행 후 ingredient_patch_status=READY를 확인하고 최신 서버를 실행함.
 
 02는 원본 컬럼명을 쓰므로 03보다 먼저 실행합니다. 이미 샘플이 있는 DB에서 02를 다시 실행하지 않습니다.
 03 적용 후 16개 테이블·125개 컬럼, 05 적용 후 16개 테이블·127개 컬럼·FK 18개임. 앱의 SQL 자동 실행과 JPA 자동 DDL은 꺼져 있습니다.
-setup-local-db.ps1도 00 → 01 → 02(선택) → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 순서로 실행함.
+setup-local-db.ps1도 00 → 01 → 02(선택) → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 → 11 순서로 실행함.
 
 ## 이미 사용 중인 DB
 
-기존 원본 구조나 이전 변경을 적용한 DB는 **03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 순서로 필요한 패치를 실행함**. 이미 적용된 패치는 다시 초기화하지 않음.
+기존 원본 구조나 이전 변경을 적용한 DB는 **03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 → 11 순서로 필요한 패치를 실행함**. 이미 적용된 패치는 다시 초기화하지 않음.
 01·02를 다시 실행하거나 기존 데이터를 초기화할 필요가 없습니다. 03은 이미 적용된 컬럼·제약·표를 확인해 건너뜁니다.
 
 통합 내용:
@@ -89,3 +91,9 @@ HAVING COUNT(*) > 1;
 - 서버가 DB에 자동 적용하지 않음. 미적용이면 낱알 상세 API만503 IDENTIFICATION_SCHEMA_NOT_READY이며 유료 판독 전에 중단함. 처방전과 이름 검색은 유지함.
 - 업무 결과는30분 만료이며 기존 사진 정리 주기에서 제거함. 취소·교체·등록 시 snapshot은 즉시 비움.
 - 되돌릴 때 PILL_CLUES 읽기 지원 빌드를 사용하고 PILL_IDENTIFICATION_ENABLED=false로 진입을 닫음. 표를 즉시 DROP하거나 기존 출처를 변경하지 않음.
+
+## 성분명 확장 패치11
+
+- drug.material을 VARCHAR(30)에서 VARCHAR(100) NOT NULL로 확장함. 표·열 추가나 기존 값 자르기는 없음. 재실행 가능하며 최종 ingredient_patch_status=READY를 확인함.
+- 새 서버 배포 전에 명시적으로 적용함. 앱이 사용자DB에 자동 적용하지 않으며 기존에 잘린 성분은 이 DDL로 복원되지 않음.
+- 이후 공식 정보 갱신에서 한글 MAIN_ITEM_INGR를 우선하고 없으면 영문 ITEM_INGR_NAME을 사용함. 정리한 전체 성분이100자를 넘으면503으로 안내하며 조용히 자르지 않음.

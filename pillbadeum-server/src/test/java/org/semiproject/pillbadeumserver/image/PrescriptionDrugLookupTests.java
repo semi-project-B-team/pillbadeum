@@ -86,6 +86,36 @@ class PrescriptionDrugLookupTests {
         verify(client, times(1)).get(anyString(), anyMap());
     }
 
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "합성정60mg... | 합성정60밀리그램(성분)",
+        "합성정60mg… | 합성정60밀리그램(성분)",
+        "합성정60mg(성분... | 합성정60밀리그램(성분)",
+        "합성정60mg(성분 | 합성정60밀리그램(성분)",
+        "합성정0.5mg... | 합성정500마이크로그램",
+        "합성정0.25/1000mg… | 합성정0.25mg/1000mg",
+        "합성서방정60mg... | 합성서방정60밀리그램"
+    })
+    void clippedDescriptionDoesNotDiscardAnOtherwiseExactProduct(String input, String candidate) {
+        when(client.get(anyString(), anyMap())).thenReturn(rows(List.of(candidate, "다른정60mg", "합성정30mg", "합성캡슐60mg")));
+        assertThat(lookup.find(input, null)).singleElement()
+                .satisfies(row -> assertThat(row.path("ITEM_NAME").asString()).isEqualTo(candidate));
+        verify(client).get(anyString(), argThat(params -> !params.get("item_name").toString().contains("...")));
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"합성정60...", "합성정0.5m…", "합성서방...", "합성정5mg/..."})
+    void incompleteStrengthOrDosageFormRequiresNameSupplementInsteadOfGuessing(String input) {
+        assertThat(lookup.find(input, null)).isEmpty();
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void clippedNameWithoutStrengthKeepsAllExactProductStrengthOptions() {
+        when(client.get(anyString(), anyMap())).thenReturn(rows(List.of("합성정30mg", "합성정60mg", "다른정60mg", "합성서방정60mg")));
+        assertThat(lookup.find("합성정...", null)).hasSize(2);
+    }
+
     @Test
     void unsupportedConcentrationNeverFallsBackToTheBareProductName() {
         var queries = new ArrayList<String>();

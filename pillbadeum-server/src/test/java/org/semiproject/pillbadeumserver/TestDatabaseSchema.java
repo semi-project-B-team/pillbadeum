@@ -26,6 +26,7 @@ public final class TestDatabaseSchema {
         ScriptUtils.executeSqlScript(connection, new FileSystemResource("sql/08_CHAT_DUR_SNAPSHOT.sql"));
         ScriptUtils.executeSqlScript(connection, new FileSystemResource("sql/09_VECTOR_CLEANUP.sql"));
         ScriptUtils.executeSqlScript(connection, new FileSystemResource("sql/10_PILL_IDENTIFICATION_SESSION.sql"));
+        ScriptUtils.executeSqlScript(connection, new FileSystemResource("sql/11_DRUG_INGREDIENT_LENGTH.sql"));
     }
 
     /** 이미 이름 변경된 테스트 DB에도 원본 02의 샘플을 넣을 수 있게 메모리에서만 이름을 대응한다. */

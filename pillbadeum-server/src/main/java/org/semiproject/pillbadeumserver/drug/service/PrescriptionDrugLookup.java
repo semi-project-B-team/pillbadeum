@@ -38,17 +38,28 @@ public final class PrescriptionDrugLookup {
     private static final class Clue {
         final String clean, base, form;
         final List<BigDecimal> strengths;
-        final boolean complex;
+        final boolean complex, truncated, queryable;
 
         Clue(String name) {
-            clean = clean(name);
+            String original = clean(name);
+            String withoutEllipsis = original.replaceFirst("\\.{2,}$", "");
+            int open = withoutEllipsis.lastIndexOf('(');
+            boolean openDescription = open >= 0 && withoutEllipsis.indexOf(')', open) < 0;
+            truncated = !original.equals(withoutEllipsis) || openDescription;
+            clean = openDescription ? withoutEllipsis.substring(0, open) : withoutEllipsis;
             strengths = strengths(clean);
             complex = COMPLEX.matcher(clean).find();
             base = base(clean);
             form = form(base);
+            // 잘린 함량·제형은 추측하지 않음. 온전한 제품명 또는 질량 단위까지 읽힌 경우만 조회함.
+            var mass = MASS.matcher(clean);
+            boolean completeMass = false;
+            while (mass.find()) completeMass = mass.end() == clean.length();
+            queryable = !truncated || completeMass || FORM.matcher(clean).find();
         }
 
         List<String> queries() {
+            if (!queryable) return List.of();
             var result = new LinkedHashSet<String>();
             if (!clean.isBlank()) result.add(clean);
             result.add(swapUnits(clean));
@@ -65,8 +76,8 @@ public final class PrescriptionDrugLookup {
                 String expected = canonicalUnits(clean), actual = canonicalUnits(candidate);
                 return actual.equals(expected) || actual.startsWith(expected + "(");
             }
-            if (!strengths.isEmpty()) {
-                if (COMPLEX.matcher(candidate).find() || !strengths.equals(strengths(candidate))) return false;
+            if (!strengths.isEmpty() || truncated) {
+                if (!strengths.isEmpty() && (COMPLEX.matcher(candidate).find() || !strengths.equals(strengths(candidate)))) return false;
                 // 넓은 이름 조회의 결과라도 다른 제품을 채택하지 않음. 괄호의 성분 설명은 제품명과 구분함.
                 if (!base(candidate).equals(base)) return false;
             }

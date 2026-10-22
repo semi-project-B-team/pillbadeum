@@ -14,6 +14,9 @@
 
 ## HTTP 연결
 
+- 낱알 OCR·후보 작업은 정식/호환 경로 모두 전체85초 마감을 공유함. OCR read timeout·HTTP408/504 뒤 자동 재호출하지 않음. 파일 업로드·DB·프록시 시간을 포함한 절대 응답 시간 보장은 아님.
+- 낱알 후보의 ingredientName은 공식 성분명이며 SQL11의100자 저장 계약을 따름. 단서 비교·동률 정책과 후보 수 제한은 유지함.
+
 상세 응답은 기존 사진 응답 외피에 contractVersion=1·identificationId·origin·registrationSource·expiresAt·reason·후보 수·선택 가능 여부·missingFields·nextActions를 추가함. X-Pill-Identification-Version: 1 헤더를 제공함. JWT와 프로필 소유권 확인이 필요함.
 
 | 동작 | 요청 | 응답 |
